@@ -1,28 +1,27 @@
 # Имя workflow
 name: Create GitHub Release
 
-# Триггер: запуск при создании и отправке нового тега, который соответствует шаблону 'v*.*.*' (например, v1.0.0, v1.2.34).
+# Триггер: запуск при создании и отправке нового тега 'v*.*.*'
 on:
   push:
     tags:
       - 'v*.*.*'
-  # Позволяет запускать workflow вручную для отладки.
   workflow_dispatch:
 
-# Переменные окружения для проекта.
+# Переменные окружения для проекта
 env:
   PROJECT_PATH: 'MathLibrary/MathLibrary.csproj'
   PROJECT_NAME: 'MathLibrary'
   DOTNET_VERSION: '9.0.x'
-  # Название папки для хранения всех файлов релиза.
   ARTIFACTS_DIR: release-assets
 
 jobs:
   build-and-release:
-    # Задача будет выполняться на последней версии Ubuntu.
-    runs-on: ubuntu-latest
+    # ВАЖНО: Выдаем права на запись для создания релиза
+    permissions:
+      contents: write
 
-    # Шаги задачи.
+    runs-on: ubuntu-latest
     steps:
     # Шаг 1: Клонирование репозитория
     - name: Checkout repository
@@ -41,22 +40,13 @@ jobs:
     # Шаг 4: Публикация проекта под все платформы
     - name: Build and Publish for all platforms
       run: |
-        # Создаем единую папку для всех ассетов релиза.
         mkdir -p ${{ env.ARTIFACTS_DIR }}
-
-        # Список всех целевых платформ (RIDs).
         rids=("win-x64" "win-arm64" "linux-x64" "linux-arm64" "osx-x64" "osx-arm64")
-
-        # Цикл по всем платформам для автономных сборок.
         for rid in "${rids[@]}"; do
           echo "================================================="
           echo "Publishing Self-Contained for: $rid"
           echo "================================================="
-          
           dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r "$rid" --self-contained true -o "./publish_temp"
-
-          # ИСПРАВЛЕНИЕ: Определяем правильное имя файла для поиска.
-          # Для Linux и macOS .NET добавляет префикс "lib".
           filename=""
           ext=""
           case "$rid" in
@@ -73,14 +63,9 @@ jobs:
               filename="lib${{ env.PROJECT_NAME }}.$ext"
               ;;
           esac
-
-          # Копируем найденную библиотеку в папку с ассетами релиза.
           find ./publish_temp -name "$filename" -exec cp {} ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-$rid.$ext \;
-          
-          # Очищаем временную папку.
           rm -rf ./publish_temp/*
         done
-
         echo "================================================="
         echo "Publishing Framework-Dependent (Portable)"
         echo "================================================="
@@ -88,24 +73,18 @@ jobs:
         cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-portable.dll
 
     # Шаг 5: Архивирование исходного кода
-    # Архив сразу создается в папке с ассетами релиза.
     - name: Archive source code
       run: |
         zip -r -9 ./${{ env.ARTIFACTS_DIR }}/source-code.zip . -x ".git/*" -x ".github/*" -x "bin/*" -x "obj/*" -x "${{ env.ARTIFACTS_DIR }}/*" -x "publish_temp/*"
 
     # Шаг 6: Создание релиза на GitHub
-    # Этот шаг берет все файлы из папки ассетов и прикрепляет их к новому релизу.
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
-        # Указываем, что нужно загрузить все файлы из нашей папки.
         files: ${{ env.ARTIFACTS_DIR }}/*
-        # Название и описание релиза можно настраивать.
-        # ${{ github.ref_name }} автоматически возьмет имя тега (например, "v1.0.0").
         name: Release ${{ github.ref_name }}
         body: |
           New release based on tag ${{ github.ref_name }}
           Contains pre-compiled libraries for Windows, Linux, and macOS (x64 & arm64).
-        # Токен нужен для предоставления прав на создание релиза.
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
