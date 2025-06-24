@@ -1,65 +1,79 @@
-# Имя workflow
+# Имя workflow, которое будет отображаться на вкладке Actions в GitHub.
 name: Build, Package and Release
 
-# Триггеры запуска
+# Раздел on определяет события, которые запускают этот workflow.
 on:
+  # Запуск при отправке (push) изменений в ветку "main".
   push:
     branches: [ "main" ]
+  # Запуск при создании запроса на слияние (pull request) в ветку "main".
   pull_request:
     branches: [ "main" ]
-  # Позволяет запускать workflow вручную со страницы "Actions"
+  # Позволяет запускать workflow вручную со страницы "Actions".
   workflow_dispatch:
 
-# Переменные окружения, которые нужно настроить под ваш проект
+# Переменные окружения, доступные для всех шагов в этом workflow.
+# Настройте их в соответствии с вашим проектом.
 env:
+  # Путь к файлу проекта .csproj относительно корня репозитория.
   PROJECT_PATH: 'MathLibrary/MathLibrary.csproj'
-  # Оно будет использоваться для поиска скомпилированного файла (.dll, .so, .dylib)
+  # Имя вашего проекта (без расширения .csproj).
+  # Используется для поиска скомпилированных файлов (.dll, .so, .dylib).
   PROJECT_NAME: 'MathLibrary'
+  # Версия .NET SDK, которую необходимо использовать для сборки.
   DOTNET_VERSION: '9.0.x'
 
+# Задачи (jobs), из которых состоит workflow.
 jobs:
+  # Имя единственной задачи. Вы можете назвать ее как угодно.
   build-and-package:
+    # Указывает, на какой операционной системе будет работать задача.
+    # ubuntu-latest является универсальным и быстрым вариантом для кросс-компиляции .NET.
     runs-on: ubuntu-latest
 
+    # Шаги (steps), которые последовательно выполняются в рамках задачи.
     steps:
-    # 1. Клонируем репозиторий
+    # Шаг 1: Клонирование репозитория
+    # Скачивает код вашего проекта на виртуальную машину для дальнейшей работы.
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    # 2. Устанавливаем .NET SDK нужной версии
+    # Шаг 2: Установка .NET SDK
+    # Устанавливает на виртуальную машину нужную версию .NET.
     - name: Setup .NET SDK
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
 
-    # 3. Восстанавливаем NuGet-зависимости
+    # Шаг 3: Восстановление зависимостей
+    # Выполняет команду `dotnet restore`, которая скачивает все NuGet-пакеты.
+    # Если в .csproj указаны <RuntimeIdentifiers>, зависимости будут подготовлены для всех целевых платформ.
     - name: Restore dependencies
       run: dotnet restore ${{ env.PROJECT_PATH }}
 
-    # 4. Собираем проект в конфигурации Release (проверка компиляции)
-    - name: Build project
-      run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
-
-    # 5. Публикуем под все платформы и извлекаем библиотеки
+    # Шаг 4: Публикация под все платформы и сборка артефактов
     - name: Publish for all platforms and collect libraries
       run: |
-        # Создаем временные папки для сборок и для артефактов
+        # Создает директорию для хранения готовых библиотек.
         mkdir -p ./artifacts/libs
 
-        # Список всех целевых платформ (Runtime Identifiers)
+        # Список целевых платформ (Runtime Identifiers - RIDs) для сборки.
         rids=("win-x64" "win-arm64" "linux-x64" "linux-arm64" "osx-x64" "osx-arm64")
 
-        # Цикл по всем платформам для автономной сборки
+        # Цикл по всем платформам для создания автономных сборок.
         for rid in "${rids[@]}"; do
           echo "================================================="
           echo "Publishing Self-Contained for: $rid"
           echo "================================================="
           
-          # Публикуем проект. --self-contained true соответствует режиму "Автономное"
-          # Вывод будет в папку ./publish_temp
-          dotnet publish "${{ env.PROJECT_PATH }}" -c Release --no-build -r "$rid" --self-contained true -o "./publish_temp"
+          # Публикует проект для конкретной платформы.
+          # -c Release: сборка в релизной конфигурации.
+          # -r "$rid": указание целевой платформы.
+          # --self-contained true: включает среду .NET в сборку.
+          # -o "./publish_temp": указывает временную папку для вывода.
+          dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r "$rid" --self-contained true -o "./publish_temp"
 
-          # Определяем расширение библиотеки для текущей ОС
+          # Определяет правильное расширение файла для текущей платформы.
           ext=""
           case "$rid" in
             win*) ext="dll" ;;
@@ -67,38 +81,39 @@ jobs:
             *)    ext="so" ;;
           esac
 
-          # Находим нашу главную библиотеку и копируем ее в папку с артефактами
-          # с понятным именем, например: lib-YourProjectName-win-x64.dll
+          # Находит скомпилированную библиотеку, переименовывает ее и копирует в папку артефактов.
           find ./publish_temp -name "${{ env.PROJECT_NAME }}.$ext" -exec cp {} ./artifacts/libs/lib-${{ env.PROJECT_NAME }}-$rid.$ext \;
           
-          # Очищаем временную папку для следующей сборки
+          # Очищает временную папку для следующей итерации цикла.
           rm -rf ./publish_temp/*
         done
 
         echo "================================================="
         echo "Publishing Framework-Dependent (Portable)"
         echo "================================================="
-        # Отдельно делаем переносимую сборку (Зависит от платформы)
-        dotnet publish "${{ env.PROJECT_PATH }}" -c Release --no-build -o "./publish_temp"
+        # Создает переносимую (зависимую от фреймворка) сборку.
+        dotnet publish "${{ env.PROJECT_PATH }}" -c Release -o "./publish_temp"
         cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./artifacts/libs/lib-${{ env.PROJECT_NAME }}-portable.dll
 
-    # 6. Архивируем исходный код с максимальным сжатием
+    # Шаг 5: Архивирование исходного кода
     - name: Archive source code
       run: |
-        # Используем команду zip с уровнем сжатия -9 (максимальный)
-        # Исключаем ненужные папки, чтобы архив был чистым
+        # Создает zip-архив с исходным кодом.
+        # -r: рекурсивно добавить файлы.
+        # -9: максимальный уровень сжатия.
+        # -x: исключить ненужные директории и файлы из архива.
         zip -r -9 source-code.zip . -x ".git/*" -x ".github/*" -x "bin/*" -x "obj/*" -x "artifacts/*" -x "publish_temp/*"
 
-    # 7. Загружаем артефакт с динамическими библиотеками
+    # Шаг 6: Загрузка артефакта с библиотеками
+    # Сохраняет собранные библиотеки как артефакт, доступный для скачивания.
     - name: Upload Libraries Artifact
       uses: actions/upload-artifact@v4
       with:
-        # Имя артефакта, который появится в GitHub
         name: compiled-libraries
-        # Путь к папке с библиотеками
         path: artifacts/libs/
 
-    # 8. Загружаем артефакт с архивом исходного кода
+    # Шаг 7: Загрузка артефакта с исходным кодом
+    # Сохраняет zip-архив с исходным кодом как артефакт.
     - name: Upload Source Code Artifact
       uses: actions/upload-artifact@v4
       with:
