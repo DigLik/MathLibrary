@@ -3,10 +3,10 @@
 public readonly partial record struct Triangle
 {
     /// <summary>
-    /// Приватное свойство для вычисления векторного произведения ребер.
+    /// Cвойство для вычисления векторного произведения ребер.
     /// Используется для расчета и нормали, и площади.
     /// </summary>
-    private Vector3 CrossProduct => Vector3.Cross(B - A, C - A);
+    public Vector3 CrossProduct => Vector3.Cross(B - A, C - A);
 
     /// <summary>
     /// Возвращает нормаль треугольника (единичный вектор, перпендикулярный его плоскости).

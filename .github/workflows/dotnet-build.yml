@@ -1,0 +1,106 @@
+# Имя workflow
+name: Build, Package and Release
+
+# Триггеры запуска
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  # Позволяет запускать workflow вручную со страницы "Actions"
+  workflow_dispatch:
+
+# Переменные окружения, которые нужно настроить под ваш проект
+env:
+  PROJECT_PATH: 'MathLibrary/MathLibrary.csproj'
+  # Оно будет использоваться для поиска скомпилированного файла (.dll, .so, .dylib)
+  PROJECT_NAME: 'MathLibrary'
+  DOTNET_VERSION: '9.0.x'
+
+jobs:
+  build-and-package:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Клонируем репозиторий
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # 2. Устанавливаем .NET SDK нужной версии
+    - name: Setup .NET SDK
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    # 3. Восстанавливаем NuGet-зависимости
+    - name: Restore dependencies
+      run: dotnet restore ${{ env.PROJECT_PATH }}
+
+    # 4. Собираем проект в конфигурации Release (проверка компиляции)
+    - name: Build project
+      run: dotnet build ${{ env.PROJECT_PATH }} --configuration Release --no-restore
+
+    # 5. Публикуем под все платформы и извлекаем библиотеки
+    - name: Publish for all platforms and collect libraries
+      run: |
+        # Создаем временные папки для сборок и для артефактов
+        mkdir -p ./artifacts/libs
+
+        # Список всех целевых платформ (Runtime Identifiers)
+        rids=("win-x64" "win-arm64" "linux-x64" "linux-arm64" "osx-x64" "osx-arm64")
+
+        # Цикл по всем платформам для автономной сборки
+        for rid in "${rids[@]}"; do
+          echo "================================================="
+          echo "Publishing Self-Contained for: $rid"
+          echo "================================================="
+          
+          # Публикуем проект. --self-contained true соответствует режиму "Автономное"
+          # Вывод будет в папку ./publish_temp
+          dotnet publish "${{ env.PROJECT_PATH }}" -c Release --no-build -r "$rid" --self-contained true -o "./publish_temp"
+
+          # Определяем расширение библиотеки для текущей ОС
+          ext=""
+          case "$rid" in
+            win*) ext="dll" ;;
+            osx*) ext="dylib" ;;
+            *)    ext="so" ;;
+          esac
+
+          # Находим нашу главную библиотеку и копируем ее в папку с артефактами
+          # с понятным именем, например: lib-YourProjectName-win-x64.dll
+          find ./publish_temp -name "${{ env.PROJECT_NAME }}.$ext" -exec cp {} ./artifacts/libs/lib-${{ env.PROJECT_NAME }}-$rid.$ext \;
+          
+          # Очищаем временную папку для следующей сборки
+          rm -rf ./publish_temp/*
+        done
+
+        echo "================================================="
+        echo "Publishing Framework-Dependent (Portable)"
+        echo "================================================="
+        # Отдельно делаем переносимую сборку (Зависит от платформы)
+        dotnet publish "${{ env.PROJECT_PATH }}" -c Release --no-build -o "./publish_temp"
+        cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./artifacts/libs/lib-${{ env.PROJECT_NAME }}-portable.dll
+
+    # 6. Архивируем исходный код с максимальным сжатием
+    - name: Archive source code
+      run: |
+        # Используем команду zip с уровнем сжатия -9 (максимальный)
+        # Исключаем ненужные папки, чтобы архив был чистым
+        zip -r -9 source-code.zip . -x ".git/*" -x ".github/*" -x "bin/*" -x "obj/*" -x "artifacts/*" -x "publish_temp/*"
+
+    # 7. Загружаем артефакт с динамическими библиотеками
+    - name: Upload Libraries Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        # Имя артефакта, который появится в GitHub
+        name: compiled-libraries
+        # Путь к папке с библиотеками
+        path: artifacts/libs/
+
+    # 8. Загружаем артефакт с архивом исходного кода
+    - name: Upload Source Code Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: source-code-zip
+        path: source-code.zip
