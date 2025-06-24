@@ -17,7 +17,7 @@ env:
 
 jobs:
   build-and-release:
-    # ВАЖНО: Выдаем права на запись для создания релиза
+    # Выдаем права на запись для создания релиза
     permissions:
       contents: write
 
@@ -42,42 +42,28 @@ jobs:
       run: |
         mkdir -p ${{ env.ARTIFACTS_DIR }}
         rids=("win-x64" "win-arm64" "linux-x64" "linux-arm64" "osx-x64" "osx-arm64")
+        
         for rid in "${rids[@]}"; do
           echo "================================================="
           echo "Publishing Self-Contained for: $rid"
           echo "================================================="
           dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r "$rid" --self-contained true -o "./publish_temp"
-          filename=""
-          ext=""
-          case "$rid" in
-            win*) 
-              ext="dll"
-              filename="${{ env.PROJECT_NAME }}.$ext"
-              ;;
-            osx*) 
-              ext="dylib"
-              filename="lib${{ env.PROJECT_NAME }}.$ext"
-              ;;
-            *)    
-              ext="so"
-              filename="lib${{ env.PROJECT_NAME }}.$ext"
-              ;;
-          esac
-          find ./publish_temp -name "$filename" -exec cp {} ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-$rid.$ext \;
+          
+          # ИСПРАВЛЕНИЕ: Основной файл библиотеки всегда имеет расширение .dll.
+          # Мы просто копируем его с новым, описательным именем.
+          cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-$rid.dll
+          
           rm -rf ./publish_temp/*
         done
+
         echo "================================================="
         echo "Publishing Framework-Dependent (Portable)"
         echo "================================================="
         dotnet publish "${{ env.PROJECT_PATH }}" -c Release -o "./publish_temp"
         cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-portable.dll
 
-    # Шаг 5: Архивирование исходного кода
-    - name: Archive source code
-      run: |
-        zip -r -9 ./${{ env.ARTIFACTS_DIR }}/source-code.zip . -x ".git/*" -x ".github/*" -x "bin/*" -x "obj/*" -x "${{ env.ARTIFACTS_DIR }}/*" -x "publish_temp/*"
-
-    # Шаг 6: Создание релиза на GitHub
+    # Шаг 5: Создание релиза на GitHub
+    # Архив с исходным кодом будет добавлен автоматически самим GitHub.
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
