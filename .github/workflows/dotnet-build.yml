@@ -1,5 +1,5 @@
 # Имя workflow
-name: Create GitHub Release
+name: Build, Release and Publish to NuGet
 
 # Триггер: запуск при создании и отправке нового тега 'v*.*.*'
 on:
@@ -37,40 +37,43 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore ${{ env.PROJECT_PATH }}
 
-    # Шаг 4: Публикация проекта под все платформы
-    - name: Build and Publish for all platforms
+    # Шаг 4: Упаковка NuGet-пакета
+    # Создает .nupkg файл. Версия пакета берется из имени тега.
+    - name: Pack NuGet package
       run: |
-        mkdir -p ${{ env.ARTIFACTS_DIR }}
+        # ${{ github.ref_name }} автоматически содержит имя тега (например, v1.0.0)
+        # Убираем 'v' из начала имени тега, чтобы получить чистую версию (1.0.0)
+        VERSION=$(echo ${{ github.ref_name }} | sed 's/^v//')
+        dotnet pack ${{ env.PROJECT_PATH }} -c Release -p:PackageVersion=$VERSION -o ${{ env.ARTIFACTS_DIR }}
+
+    # Шаг 5: Публикация в NuGet
+    # Отправляет созданный .nupkg в репозиторий NuGet.org
+    - name: Push to NuGet
+      run: dotnet nuget push "${{ env.ARTIFACTS_DIR }}/*.nupkg" --api-key ${{ secrets.NUGET_API_KEY }} --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+
+    # Шаг 6: Публикация библиотек для релиза GitHub
+    # Этот шаг остается для тех, кто хочет скачать отдельные .dll
+    - name: Build Libraries for GitHub Release
+      run: |
         rids=("win-x64" "win-arm64" "linux-x64" "linux-arm64" "osx-x64" "osx-arm64")
-        
         for rid in "${rids[@]}"; do
-          echo "================================================="
-          echo "Publishing Self-Contained for: $rid"
-          echo "================================================="
           dotnet publish "${{ env.PROJECT_PATH }}" -c Release -r "$rid" --self-contained true -o "./publish_temp"
-          
-          # ИСПРАВЛЕНИЕ: Основной файл библиотеки всегда имеет расширение .dll.
-          # Мы просто копируем его с новым, описательным именем.
           cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-$rid.dll
-          
           rm -rf ./publish_temp/*
         done
-
-        echo "================================================="
-        echo "Publishing Framework-Dependent (Portable)"
-        echo "================================================="
         dotnet publish "${{ env.PROJECT_PATH }}" -c Release -o "./publish_temp"
         cp ./publish_temp/${{ env.PROJECT_NAME }}.dll ./${{ env.ARTIFACTS_DIR }}/lib-${{ env.PROJECT_NAME }}-portable.dll
 
-    # Шаг 5: Создание релиза на GitHub
-    # Архив с исходным кодом будет добавлен автоматически самим GitHub.
+    # Шаг 7: Создание релиза на GitHub
+    # Прикрепляет к релизу все файлы из папки артефактов (и .nupkg, и .dll).
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         files: ${{ env.ARTIFACTS_DIR }}/*
         name: Release ${{ github.ref_name }}
         body: |
-          New release based on tag ${{ github.ref_name }}
+          New release based on tag ${{ github.ref_name }}.
+          Package has been published to NuGet.
           Contains pre-compiled libraries for Windows, Linux, and macOS (x64 & arm64).
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
