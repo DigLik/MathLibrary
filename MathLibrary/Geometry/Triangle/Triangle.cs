@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace MathLibrary.Geometry; // Новый, правильный неймспейс
+namespace MathLibrary.Geometry;
 
 /// <summary>
 /// Треугольник в трехмерном пространстве, определяемый тремя вершинами A, B и C.
