@@ -20,8 +20,5 @@ public readonly partial record struct Vector3
     public static Vector3 operator *(float d, in Vector3 a) => a * d;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Vector3 operator *(in Vector3 a, in Vector3 b) => new(a.X * b.X, a.Y * b.Y, a.Z * b.Z);
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static Vector3 operator /(in Vector3 a, float d) => new(a.X / d, a.Y / d, a.Z / d);
 }

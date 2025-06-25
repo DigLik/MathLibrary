@@ -9,10 +9,4 @@ public readonly partial record struct Quaternion
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator Quaternion((float X, float Y, float Z, float W) tuple) => new(tuple.X, tuple.Y, tuple.Z, tuple.W);
-
-    /// <summary>
-    /// Явное преобразование из Quaternion в кортеж (float, float, float, float).
-    /// </summary>
-    /// <param name="q"></param>
-    public static explicit operator (float X, float Y, float Z, float W)(Quaternion q) => (q.X, q.Y, q.Z, q.W);
 }
