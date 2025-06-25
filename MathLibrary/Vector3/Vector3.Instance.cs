@@ -1,9 +1,22 @@
 ﻿using MathLibrary.Core;
+using System.Runtime.CompilerServices;
 
 namespace MathLibrary;
 
 public readonly partial record struct Vector3
 {
+    public float this[int index]
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => index switch
+        {
+            0 => X,
+            1 => Y,
+            2 => Z,
+            _ => throw new IndexOutOfRangeException("Index must be 0, 1, or 2.")
+        };
+    }
+
     /// <summary>
     /// Возвращает квадрат длины вектора.
     /// </summary>
