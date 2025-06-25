@@ -79,8 +79,8 @@ public static class BvhBuilder
             return new Box(Vector3.Zero, Vector3.Zero);
         }
 
-        Vector3 min = float.MaxValue;
-        Vector3 max = float.MinValue;
+        Vector3 min = new(float.MaxValue);
+        Vector3 max = new(float.MinValue);
 
         foreach (var tri in triangles)
         {
