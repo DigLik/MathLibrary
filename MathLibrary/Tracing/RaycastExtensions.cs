@@ -78,4 +78,41 @@ public static class RaycastExtensions
         if (t > Epsilon) { distance = t; return true; }
         return false;
     }
+
+    /// <summary>
+    /// Проверяет пересечение луча с MeshTriangle для гладкого затенения.
+    /// </summary>
+    public static bool TryIntersect(this Ray ray, MeshTriangle meshTriangle, out float distance, out float u, out float v)
+    {
+        const float Epsilon = 1e-8f;
+        distance = 0; u = 0; v = 0;
+
+        var p0 = meshTriangle.Geometry.A;
+        var p1 = meshTriangle.Geometry.B;
+        var p2 = meshTriangle.Geometry.C;
+
+        Vector3 edge1 = p1 - p0;
+        Vector3 edge2 = p2 - p0;
+        Vector3 h = Vector3.Cross(ray.Direction, edge2);
+        float a = Vector3.Dot(edge1, h);
+
+        if (a > -Epsilon && a < Epsilon) return false;
+
+        float f = 1.0f / a;
+        Vector3 s = ray.Origin - p0;
+        u = f * Vector3.Dot(s, h);
+        if (u < 0.0f || u > 1.0f) return false;
+
+        Vector3 q = Vector3.Cross(s, edge1);
+        v = f * Vector3.Dot(ray.Direction, q);
+        if (v < 0.0f || u + v > 1.0f) return false;
+
+        float t = f * Vector3.Dot(edge2, q);
+        if (t > Epsilon)
+        {
+            distance = t;
+            return true;
+        }
+        return false;
+    }
 }

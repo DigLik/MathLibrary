@@ -7,7 +7,7 @@ public readonly partial record struct Matrix4x4
     /// <summary>
     /// Размер структуры в байтах.
     /// </summary>
-    public static int SizeInBytes => Unsafe.SizeOf<Matrix4x4>();
+    public const int SizeInBytes = 16 * sizeof(float);
 
     /// <summary>
     /// Нулевая матрица.

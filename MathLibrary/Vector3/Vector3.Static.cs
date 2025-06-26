@@ -17,6 +17,14 @@ public readonly partial record struct Vector3
     public static Vector3 Max(in Vector3 a, in Vector3 b)
         => new(MathF.Max(a.X, b.X), MathF.Max(a.Y, b.Y), MathF.Max(a.Z, b.Z));
 
+    public static Vector3 Normalize(in Vector3 vector)
+    {
+        var magnitude = vector.Magnitude;
+        return !MathHelper.Approximately(magnitude, 0f)
+            ? vector / magnitude
+            : Zero;
+    }
+
     /// <summary>
     /// Вычисляет скалярное произведение двух векторов.
     /// </summary>
