@@ -1,4 +1,5 @@
 ﻿using MathLibrary.Geometry;
+using MathLibrary.Tracing;
 
 namespace MathLibrary.BVH;
 public static class BvhBuilder
@@ -9,60 +10,46 @@ public static class BvhBuilder
     /// <param name="triangles">Список всех треугольников в сцене.</param>
     /// <param name="maxPrimitivesPerNode">Максимальное количество треугольников в листовом узле.</param>
     /// <returns>Корневой узел построенного BVH-дерева.</returns>
-    public static BvhNode Build(List<Triangle> triangles, int maxPrimitivesPerNode = 4)
+    public static BvhNode? Build(IReadOnlyList<MeshTriangle> meshTriangles, int maxPrimitivesPerNode = 8)
     {
-        return triangles.Count == 0
-            ? throw new ArgumentException("Cannot build BVH for an empty list of triangles.")
-            : BuildRecursive(triangles, maxPrimitivesPerNode);
+        return meshTriangles == null || meshTriangles.Count == 0
+            ? null
+            : BuildRecursive([.. meshTriangles], maxPrimitivesPerNode);
     }
 
-    private static BvhNode BuildRecursive(List<Triangle> triangles, int maxPrimitivesPerNode)
+    private static BvhNode BuildRecursive(List<MeshTriangle> meshTriangles, int maxPrimitivesPerNode)
     {
-        // Вычисляем ограничивающий объем для текущего набора треугольников
-        var nodeBox = CalculateBounds(triangles);
+        var nodeBox = CalculateBounds(meshTriangles);
 
-        // Базовый случай рекурсии: если треугольников мало, создаем листовой узел
-        if (triangles.Count <= maxPrimitivesPerNode)
+        if (meshTriangles.Count <= maxPrimitivesPerNode)
         {
-            return new BvhNode(nodeBox, [.. triangles]);
+            return new BvhNode(nodeBox, meshTriangles);
         }
 
-        // 1. Находим самую длинную ось ограничивающего объема
-        Vector3 extent = nodeBox.Max - nodeBox.Min;
-        int axis = 0; // 0=X, 1=Y, 2=Z
+        var extent = nodeBox.Max - nodeBox.Min;
+        int axis = 0;
         if (extent.Y > extent.X) axis = 1;
-        if (extent.Z > extent.Y && extent.Z > extent.X) axis = 2;
+        if (extent.Z > extent[axis]) axis = 2;
 
-        // 2. Определяем точку разделения (медиана по выбранной оси)
         float splitPos = nodeBox.Min[axis] + extent[axis] * 0.5f;
 
-        // 3. Разделяем треугольники на два списка на основе положения их центроидов
-        var leftPrimitives = new List<Triangle>();
-        var rightPrimitives = new List<Triangle>();
+        var leftPrimitives = new List<MeshTriangle>();
+        var rightPrimitives = new List<MeshTriangle>();
 
-        foreach (var tri in triangles)
+        foreach (var tri in meshTriangles)
         {
-            Vector3 centroid = (tri.A + tri.B + tri.C) / 3.0f;
-            if (centroid[axis] < splitPos)
-            {
-                leftPrimitives.Add(tri);
-            }
-            else
-            {
-                rightPrimitives.Add(tri);
-            }
+            Vector3 centroid = (tri.Geometry.A + tri.Geometry.B + tri.Geometry.C) / 3.0f;
+            if (centroid[axis] < splitPos) leftPrimitives.Add(tri);
+            else rightPrimitives.Add(tri);
         }
 
-        // Обработка крайнего случая: если все треугольники попали в один из списков
         if (leftPrimitives.Count == 0 || rightPrimitives.Count == 0)
         {
-            // Просто делим исходный список пополам, чтобы избежать бесконечной рекурсии
-            int mid = triangles.Count / 2;
-            leftPrimitives = triangles.GetRange(0, mid);
-            rightPrimitives = triangles.GetRange(mid, triangles.Count - mid);
+            int mid = meshTriangles.Count / 2;
+            leftPrimitives = meshTriangles.GetRange(0, mid);
+            rightPrimitives = meshTriangles.GetRange(mid, meshTriangles.Count - mid);
         }
 
-        // 4. Рекурсивно строим дочерние узлы
         var leftChild = BuildRecursive(leftPrimitives, maxPrimitivesPerNode);
         var rightChild = BuildRecursive(rightPrimitives, maxPrimitivesPerNode);
 
@@ -72,25 +59,18 @@ public static class BvhBuilder
     /// <summary>
     /// Вычисляет AABB, который охватывает список треугольников.
     /// </summary>
-    private static Box CalculateBounds(List<Triangle> triangles)
+    private static Box CalculateBounds(List<MeshTriangle> meshTriangles)
     {
-        if (triangles.Count == 0)
+        if (meshTriangles.Count == 0) return new Box(Vector3.Zero, Vector3.Zero);
+
+        var min = new Vector3(float.MaxValue);
+        var max = new Vector3(float.MinValue);
+
+        foreach (var meshTri in meshTriangles)
         {
-            return new Box(Vector3.Zero, Vector3.Zero);
-        }
-
-        Vector3 min = new(float.MaxValue);
-        Vector3 max = new(float.MinValue);
-
-        foreach (var tri in triangles)
-        {
-            min = Vector3.Min(min, tri.A);
-            min = Vector3.Min(min, tri.B);
-            min = Vector3.Min(min, tri.C);
-
-            max = Vector3.Max(max, tri.A);
-            max = Vector3.Max(max, tri.B);
-            max = Vector3.Max(max, tri.C);
+            var tri = meshTri.Geometry;
+            min = Vector3.Min(min, Vector3.Min(tri.A, Vector3.Min(tri.B, tri.C)));
+            max = Vector3.Max(max, Vector3.Max(tri.A, Vector3.Max(tri.B, tri.C)));
         }
         return new Box(min, max);
     }

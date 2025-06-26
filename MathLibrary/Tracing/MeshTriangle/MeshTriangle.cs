@@ -3,7 +3,8 @@
 namespace MathLibrary.Tracing;
 
 /// <summary>
-/// "Обертка" над Triangle, хранящая нормали для гладкого затенения.
+/// Представляет треугольник с нормалями в каждой вершине для гладкого затенения.
+/// Это основной примитив для рендеринга.
 /// </summary>
 public readonly record struct MeshTriangle(
     Triangle Geometry,

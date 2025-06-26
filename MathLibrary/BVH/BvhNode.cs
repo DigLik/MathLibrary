@@ -1,4 +1,5 @@
 ﻿using MathLibrary.Geometry;
+using MathLibrary.Tracing;
 
 namespace MathLibrary.BVH;
 public class BvhNode
@@ -21,7 +22,7 @@ public class BvhNode
     /// <summary>
     /// Список треугольников. Заполнен только для листовых узлов.
     /// </summary>
-    public List<Triangle>? Primitives { get; }
+    public List<MeshTriangle>? Primitives { get; }
 
     /// <summary>
     /// Является ли этот узел листовым.
@@ -38,7 +39,7 @@ public class BvhNode
     }
 
     // Конструктор для листового узла
-    public BvhNode(Box box, List<Triangle> primitives)
+    public BvhNode(Box box, List<MeshTriangle> primitives)
     {
         BoundingBox = box;
         LeftChild = null;
