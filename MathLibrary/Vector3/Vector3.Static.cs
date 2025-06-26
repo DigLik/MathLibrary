@@ -25,6 +25,36 @@ public readonly partial record struct Vector3
             : Zero;
     }
 
+    public static Vector3 Transform(in Vector3 vector, in Quaternion matrix)
+    {
+        var magnitude = matrix.Magnitude;
+        if (MathHelper.Approximately(magnitude, 0f))
+            return Zero;
+        var x = vector.X;
+        var y = vector.Y;
+        var z = vector.Z;
+        var qx = matrix.X;
+        var qy = matrix.Y;
+        var qz = matrix.Z;
+        var qw = matrix.W;
+        var ix = qw * x + qy * z - qz * y;
+        var iy = qw * y + qz * x - qx * z;
+        var iz = qw * z + qx * y - qy * x;
+        var iw = -qx * x - qy * y - qz * z;
+        return new Vector3(
+            ix * qw + iw * -qx + iy * -qz - iz * -qy,
+            iy * qw + iw * -qy + iz * -qx - ix * -qz,
+            iz * qw + iw * -qz + ix * -qy - iy * -qx) / magnitude;
+    }
+
+    public static Vector3 Refract(in Vector3 vector, in Vector3 normal, float eta)
+    {
+        var dot = Dot(vector, normal);
+        var k = 1f - eta * eta * (1f - dot * dot);
+        if (k < 0f) return Zero; // Total internal reflection
+        return eta * vector - (eta * dot + MathF.Sqrt(k)) * normal;
+    }
+
     /// <summary>
     /// Вычисляет скалярное произведение двух векторов.
     /// </summary>

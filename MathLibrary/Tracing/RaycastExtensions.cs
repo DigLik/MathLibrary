@@ -18,37 +18,35 @@ public static class RaycastExtensions
         float tmax = float.MaxValue;
 
         // Ось X
-        if (Math.Abs(ray.Direction.X) < 1e-6f) { if (ray.Origin.X < box.Min.X || ray.Origin.X > box.Max.X) { distance = 0; return false; } }
-        else
-        {
-            float t1 = (box.Min.X - ray.Origin.X) / ray.Direction.X; float t2 = (box.Max.X - ray.Origin.X) / ray.Direction.X;
-            if (t1 > t2) (t2, t1) = (t1, t2);
-            tmin = Math.Max(tmin, t1); tmax = Math.Min(tmax, t2);
-        }
+        float invDirX = 1.0f / ray.Direction.X;
+        float t1x = (box.Min.X - ray.Origin.X) * invDirX;
+        float t2x = (box.Max.X - ray.Origin.X) * invDirX;
+        if (invDirX < 0.0f) (t1x, t2x) = (t2x, t1x);
+        tmin = Math.Max(tmin, t1x);
+        tmax = Math.Min(tmax, t2x);
+        if (tmin > tmax) { distance = 0; return false; }
 
         // Ось Y
-        if (Math.Abs(ray.Direction.Y) < 1e-6f) { if (ray.Origin.Y < box.Min.Y || ray.Origin.Y > box.Max.Y) { distance = 0; return false; } }
-        else
-        {
-            float t1 = (box.Min.Y - ray.Origin.Y) / ray.Direction.Y; float t2 = (box.Max.Y - ray.Origin.Y) / ray.Direction.Y;
-            if (t1 > t2) (t2, t1) = (t1, t2);
-            tmin = Math.Max(tmin, t1); tmax = Math.Min(tmax, t2);
-        }
+        float invDirY = 1.0f / ray.Direction.Y;
+        float t1y = (box.Min.Y - ray.Origin.Y) * invDirY;
+        float t2y = (box.Max.Y - ray.Origin.Y) * invDirY;
+        if (invDirY < 0.0f) (t1y, t2y) = (t2y, t1y);
+        tmin = Math.Max(tmin, t1y);
+        tmax = Math.Min(tmax, t2y);
+        if (tmin > tmax) { distance = 0; return false; }
 
         // Ось Z
-        if (Math.Abs(ray.Direction.Z) < 1e-6f) { if (ray.Origin.Z < box.Min.Z || ray.Origin.Z > box.Max.Z) { distance = 0; return false; } }
-        else
-        {
-            float t1 = (box.Min.Z - ray.Origin.Z) / ray.Direction.Z; float t2 = (box.Max.Z - ray.Origin.Z) / ray.Direction.Z;
-            if (t1 > t2) (t2, t1) = (t1, t2);
-            tmin = Math.Max(tmin, t1); tmax = Math.Min(tmax, t2);
-        }
+        float invDirZ = 1.0f / ray.Direction.Z;
+        float t1z = (box.Min.Z - ray.Origin.Z) * invDirZ;
+        float t2z = (box.Max.Z - ray.Origin.Z) * invDirZ;
+        if (invDirZ < 0.0f) (t1z, t2z) = (t2z, t1z);
+        tmin = Math.Max(tmin, t1z);
+        tmax = Math.Min(tmax, t2z);
+        if (tmin > tmax) { distance = 0; return false; }
 
-        if (tmin > tmax || tmax < 0) { distance = 0; return false; }
-        distance = tmin < 0 ? 0 : tmin;
+        distance = tmin;
         return true;
     }
-
 
     /// <summary>
     /// Проверяет, пересекает ли луч треугольник.

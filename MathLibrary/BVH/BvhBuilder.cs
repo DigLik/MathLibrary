@@ -10,63 +10,56 @@ public static class BvhBuilder
     /// <param name="triangles">Список всех треугольников в сцене.</param>
     /// <param name="maxPrimitivesPerNode">Максимальное количество треугольников в листовом узле.</param>
     /// <returns>Корневой узел построенного BVH-дерева.</returns>
-    public static BvhNode? Build(IReadOnlyList<MeshTriangle> meshTriangles, int maxPrimitivesPerNode = 8)
+    public static BvhNode? Build(IReadOnlyList<MeshTriangle> meshTriangles, int maxPrimitivesPerNode = 4)
     {
-        return meshTriangles == null || meshTriangles.Count == 0
-            ? null
-            : BuildRecursive([.. meshTriangles], maxPrimitivesPerNode);
+        if (meshTriangles == null || meshTriangles.Count == 0) return null;
+
+        // Создаем рабочий массив один раз, чтобы избежать аллокаций в рекурсии
+        var primitives = meshTriangles as MeshTriangle[] ?? [.. meshTriangles];
+
+        return BuildRecursive(primitives.AsSpan(), maxPrimitivesPerNode);
     }
 
-    private static BvhNode BuildRecursive(List<MeshTriangle> meshTriangles, int maxPrimitivesPerNode)
+    private static BvhNode BuildRecursive(Span<MeshTriangle> triangles, int maxPrimitivesPerNode)
     {
-        var nodeBox = CalculateBounds(meshTriangles);
+        var nodeBox = CalculateBounds(triangles);
 
-        if (meshTriangles.Count <= maxPrimitivesPerNode)
+        // Базовый случай: если примитивов мало, создаем лист
+        if (triangles.Length <= maxPrimitivesPerNode)
         {
-            return new BvhNode(nodeBox, meshTriangles);
+            return new BvhNode(nodeBox, [.. triangles]);
         }
 
+        // Находим самую длинную ось для разделения
         var extent = nodeBox.Max - nodeBox.Min;
         int axis = 0;
         if (extent.Y > extent.X) axis = 1;
         if (extent.Z > extent[axis]) axis = 2;
 
-        float splitPos = nodeBox.Min[axis] + extent[axis] * 0.5f;
+        // --- ГЛАВНОЕ ИЗМЕНЕНИЕ: Сортируем срез на месте ---
+        // Это гарантирует, что мы разделим количество объектов 50/50,
+        // создавая идеально сбалансированное дерево.
+        triangles.Sort((a, b) =>
+            GetCentroid(a.Geometry)[axis].CompareTo(GetCentroid(b.Geometry)[axis]));
 
-        var leftPrimitives = new List<MeshTriangle>();
-        var rightPrimitives = new List<MeshTriangle>();
+        int mid = triangles.Length / 2;
 
-        foreach (var tri in meshTriangles)
-        {
-            Vector3 centroid = (tri.Geometry.A + tri.Geometry.B + tri.Geometry.C) / 3.0f;
-            if (centroid[axis] < splitPos) leftPrimitives.Add(tri);
-            else rightPrimitives.Add(tri);
-        }
+        // Рекурсивно строим для левой и правой половин, не создавая новых списков
+        var leftChild = BuildRecursive(triangles[..mid], maxPrimitivesPerNode);
+        var rightChild = BuildRecursive(triangles[mid..], maxPrimitivesPerNode);
 
-        if (leftPrimitives.Count == 0 || rightPrimitives.Count == 0)
-        {
-            int mid = meshTriangles.Count / 2;
-            leftPrimitives = meshTriangles.GetRange(0, mid);
-            rightPrimitives = meshTriangles.GetRange(mid, meshTriangles.Count - mid);
-        }
-
-        var leftChild = BuildRecursive(leftPrimitives, maxPrimitivesPerNode);
-        var rightChild = BuildRecursive(rightPrimitives, maxPrimitivesPerNode);
-
-        return new BvhNode(nodeBox, leftChild, rightChild);
+        return new BvhNode(nodeBox, leftChild!, rightChild!);
     }
 
     /// <summary>
     /// Вычисляет AABB, который охватывает список треугольников.
     /// </summary>
-    private static Box CalculateBounds(List<MeshTriangle> meshTriangles)
+    private static Box CalculateBounds(ReadOnlySpan<MeshTriangle> triangles)
     {
-        if (meshTriangles.Count == 0) return new Box(Vector3.Zero, Vector3.Zero);
-
         var min = new Vector3(float.MaxValue);
         var max = new Vector3(float.MinValue);
 
-        foreach (var meshTri in meshTriangles)
+        foreach (var meshTri in triangles)
         {
             var tri = meshTri.Geometry;
             min = Vector3.Min(min, Vector3.Min(tri.A, Vector3.Min(tri.B, tri.C)));
@@ -74,4 +67,6 @@ public static class BvhBuilder
         }
         return new Box(min, max);
     }
+
+    private static Vector3 GetCentroid(Triangle t) => (t.A + t.B + t.C) / 3.0f;
 }

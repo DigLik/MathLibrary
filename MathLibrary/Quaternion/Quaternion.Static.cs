@@ -16,6 +16,13 @@ public readonly partial record struct Quaternion
         return new Quaternion(axis.X * s, axis.Y * s, axis.Z * s, MathF.Cos(halfAngle));
     }
 
+    public static Quaternion CreateFromAxisAngle(in Vector3 axis, float angle)
+    {
+        return MathHelper.Approximately(axis.MagnitudeSquared, 0f)
+            ? Identity
+            : AngleAxis(axis.Normalize(), angle);
+    }
+
     /// <summary>
     /// Создает кватернион из углов Эйлера.
     /// </summary>
